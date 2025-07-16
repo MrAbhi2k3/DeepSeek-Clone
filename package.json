@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.25.2",
+    "mongoose": "^8.16.3",
     "next": "15.4.1",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "svix": "^1.69.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
