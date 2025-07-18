@@ -5,11 +5,10 @@ import { useClerk, UserButton } from '@clerk/nextjs'
 import { useAppContext } from '@/context/AppContext'
 import ChatLabel from './ChatLabel'
 
-
 const SideBar = ({expand, setExpand}) => {
 
   const { openSignIn } = useClerk();
-  const { user } = useAppContext();
+  const { user, chats, createNewchat } = useAppContext();
   const [openMenu, setOpenMenu] = useState({id: 0, open: false})
 
   return (
@@ -39,7 +38,7 @@ const SideBar = ({expand, setExpand}) => {
           </div>
         </div>
 
-        <button
+        <button onClick={createNewchat}
           className={`mt-8 flex items-center justify-center cursor-pointer ${
             expand
               ? "bg-primary hover:opacity-90 rounded-2xl gap-2 p-2.5 w-max"
@@ -62,7 +61,18 @@ const SideBar = ({expand, setExpand}) => {
         <div className={`text-white/25 text-sm ${expand ? "block" : "hidden"}`}>
           <p className='my-1'>Recents</p>
           {/* Label Call */}
-          <ChatLabel openMenu={openMenu} setOpenMenu={setOpenMenu} />
+          {
+            chats.map((chat, index) => (
+              <ChatLabel 
+                key={index}
+                id={chat._id} 
+                name={chat.name} 
+                openMenu={openMenu} 
+                setOpenMenu={setOpenMenu}
+              />
+            ))
+          }
+          {/* Add new chat */}
         </div>
       </div>
 

@@ -1,8 +1,22 @@
 import { assets } from '@/assets/assets'
 import Image from 'next/image'
-import React from 'react'
+import React, { useEffect } from 'react'
+import Markdown from 'react-markdown'
+import Prism from 'prismjs'
+import toast from 'react-hot-toast'
 
 const Message = ({role, content}) => {
+
+    // This function is used to highlight code blocks in the markdown content
+    useEffect(() => {
+        Prism.highlightAll();
+    }, [content]);
+
+    const copyMessage = () => {
+        navigator.clipboard.writeText(content);
+        toast.success("Message copied to clipboard");
+    }
+
   return (
     <div className='flex flex-col items-center w-full max-w-3xl text-sm'>
       <div className={`flex flex-col w-full mb-8 ${role === 'user' && 'items-end' }`}>
@@ -13,8 +27,8 @@ const Message = ({role, content}) => {
                     {
                         role == 'user' ? (
                             <>
-                            <Image src={assets.copy_icon} alt='' className='w-4 cursor-pointer'/>
-                            <Image src={assets.pencil_icon} alt='' className='w-4.5 cursor-pointer'/>
+                            <Image onClick={copyMessage} src={assets.copy_icon} alt='' className='w-4 cursor-pointer'/>
+                            <Image onClick={copyMessage} src={assets.pencil_icon} alt='' className='w-4.5 cursor-pointer'/>
                             </>
                         ):(
                             <>
@@ -39,7 +53,7 @@ const Message = ({role, content}) => {
                     <>
                     <Image src={assets.logo_icon} alt='' className='h-9 w-9 p-1 border border-white/15 rounded-full'/>
                     <div className='space-y-4 w-full overflow-scroll'>
-                        {content}
+                        <Markdown>{content}</Markdown>
                     </div>
                     </>
                 )
