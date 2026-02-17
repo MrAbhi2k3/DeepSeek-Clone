@@ -19,24 +19,37 @@ export const AppContextProvider = ({ children }) => {
 
   const createNewChat = async () => {
     try {
-      if (!user) return null;
+      if (!user) {
+        toast.error("Please sign in to create a new chat");
+        return null;
+      }
 
       const token = await getToken();
 
-      await axios.post(
+      const response = await axios.post(
         "/api/chat/create",
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      fetchUsersChats();
+      if (response.data.success) {
+        // Clear current selection and refresh chats
+        setSelectedChat(null);
+        await fetchUsersChats();
+        toast.success("New chat created!");
+      } else {
+        toast.error(response.data.message || "Failed to create new chat");
+      }
     } catch (error) {
-      toast.error(error.message);
+      console.error("Create chat error:", error);
+      toast.error(error.response?.data?.message || error.message || "Failed to create chat");
     }
   };
 
   const fetchUsersChats = async () => {
     try {
+      if (!user) return;
+
       const token = await getToken();
 
       const { data } = await axios.get("/api/chat/get", {
@@ -44,28 +57,61 @@ export const AppContextProvider = ({ children }) => {
       });
 
       if (data.success) {
-        console.log(data.data);
+        console.log("Fetched chats:", data.data);
         setChats(data.data);
 
         // If the user has no chats, create one
         if (data.data.length === 0) {
-          await createNewChat();
-          return fetchUsersChats();
+          // Don't create auto chat, let user create manually
+          setSelectedChat(null);
         } else {
-          // Sort charts by updated date
+          // Sort chats by updated date
           data.data.sort(
             (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
           );
 
-          // Set recently updated chat as selected chat
-          setSelectedChat(data.data[0]);
-          console.log(data.data[0]);
+          // If no chat is selected or selected chat is deleted, select the most recent
+          if (!selectedChat || !data.data.find(chat => chat._id === selectedChat._id)) {
+            setSelectedChat(data.data[0]);
+            console.log("Selected chat:", data.data[0]);
+          }
         }
       } else {
-        toast.error(data.message);
+        toast.error(data.message || "Failed to fetch chats");
       }
     } catch (error) {
-      toast.error(error.message);
+      console.error("Fetch chats error:", error);
+      toast.error(error.response?.data?.message || error.message || "Failed to fetch chats");
+    }
+  };
+
+  const refreshChatById = async (chatId) => {
+    try {
+      if (!user || !chatId) return;
+
+      const token = await getToken();
+
+      const { data } = await axios.get(`/api/chat/${chatId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (data.success && data.data) {
+        console.log("Refreshed chat:", data.data);
+        
+        // Update the specific chat in the chats array
+        setChats(prevChats => 
+          prevChats.map(chat => 
+            chat._id === chatId ? data.data : chat
+          )
+        );
+
+        // Update selectedChat if it's the one we refreshed
+        if (selectedChat && selectedChat._id === chatId) {
+          setSelectedChat(data.data);
+        }
+      }
+    } catch (error) {
+      console.error("Refresh chat error:", error);
     }
   };
 
@@ -82,6 +128,7 @@ export const AppContextProvider = ({ children }) => {
     selectedChat,
     setSelectedChat,
     fetchUsersChats,
+    refreshChatById,
     createNewChat,
   };
 

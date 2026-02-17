@@ -22,7 +22,7 @@ export async function POST(request) {
         await dbConnect();
         await Chat.create(chatData);
 
-        return NextResponse.json({sucess: true, message: "New Chat Created"})
+        return NextResponse.json({success: true, message: "New Chat Created"})
     } catch (error){
         return NextResponse.json({ success: false, error: error.message})
     }

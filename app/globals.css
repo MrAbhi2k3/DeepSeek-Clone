@@ -1,17 +1,83 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4d6bfe;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-secondary: #8b5cf6;
 }
 
 html {
-  @apply scroll-smooth;
+  scroll-behavior: smooth;
 }
 
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  display: none;
+  width: 6px;
 }
 
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.4s ease-out;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Loading dots animation */
 .loader div:nth-child(2){
   animation-delay: 0.2s;
 }
@@ -20,10 +86,71 @@ html {
   animation-delay: 0.4s;
 }
 
-code{
+/* Code styling */
+code {
   white-space: pre-wrap !important;
+  background-color: rgb(31 41 55);
+  color: rgb(243 244 246);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
 
 pre {
-  border-radius: 10px;
+  background-color: rgb(17 24 39);
+  border: 1px solid rgb(55 65 81);
+  border-radius: 12px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Message styling */
+.message-content {
+  line-height: 1.625;
+}
+
+.message-content p {
+  margin-bottom: 16px;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content ul, .message-content ol {
+  margin-bottom: 16px;
+  padding-left: 24px;
+}
+
+.message-content li {
+  margin-bottom: 8px;
+}
+
+.message-content h1, .message-content h2, .message-content h3 {
+  font-weight: bold;
+  margin-bottom: 12px;
+  margin-top: 24px;
+}
+
+.message-content h1:first-child,
+.message-content h2:first-child,
+.message-content h3:first-child {
+  margin-top: 0;
+}
+
+.message-content h1 {
+  font-size: 1.25rem;
+}
+
+.message-content h2 {
+  font-size: 1.125rem;
+}
+
+.message-content h3 {
+  font-size: 1rem;
 }
