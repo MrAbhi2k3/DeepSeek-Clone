@@ -16,13 +16,23 @@ export const AppContextProvider = ({ children }) => {
 
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
   const createNewChat = async () => {
     try {
+      if (isCreatingChat) return null;
+
       if (!user) {
         toast.error("Please sign in to create a new chat");
         return null;
       }
+
+      if (selectedChat && selectedChat.name === "New Chat" && (selectedChat.messages?.length || 0) === 0) {
+        toast("You already have an empty new chat open");
+        return selectedChat;
+      }
+
+      setIsCreatingChat(true);
 
       const token = await getToken();
 
@@ -33,14 +43,27 @@ export const AppContextProvider = ({ children }) => {
       );
 
       if (response.data.success) {
+        const createdChat = response.data.data;
+        if (createdChat) {
+          setChats((prev) => [createdChat, ...prev]);
+          setSelectedChat(createdChat);
+        } else {
+          await fetchUsersChats();
+        }
+
         await fetchUsersChats();
         toast.success("New chat created!");
+        return createdChat || null;
       } else {
         toast.error(response.data.message || "Failed to create new chat");
+        return null;
       }
     } catch (error) {
       console.error("Create chat error:", error);
       toast.error(error.response?.data?.message || error.message || "Failed to create chat");
+      return null;
+    } finally {
+      setIsCreatingChat(false);
     }
   };
 
@@ -55,20 +78,19 @@ export const AppContextProvider = ({ children }) => {
       });
 
       if (data.success) {
-        console.log("Fetched chats:", data.data);
-        setChats(data.data);
+        const nextChats = [...data.data].sort(
+          (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+        );
+        setChats(nextChats);
 
-        if (data.data.length === 0) {
+        if (nextChats.length === 0) {
           setSelectedChat(null);
         } else {
-          data.data.sort(
-            (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
-          );
-
-          if (!selectedChat || !data.data.find(chat => chat._id === selectedChat._id)) {
-            setSelectedChat(data.data[0]);
-            console.log("Selected chat:", data.data[0]);
-          }
+          setSelectedChat((prev) => {
+            if (!prev) return nextChats[0];
+            const found = nextChats.find((chat) => chat._id === prev._id);
+            return found || nextChats[0];
+          });
         }
       } else {
         toast.error(data.message || "Failed to fetch chats");
@@ -90,19 +112,16 @@ export const AppContextProvider = ({ children }) => {
       });
 
       if (data.success && data.data) {
-        console.log("Refreshed chat:", data.data);
-        
-        // Update the specific chat in the chats array
-        setChats(prevChats => 
-          prevChats.map(chat => 
+        setChats(prevChats =>
+          prevChats.map(chat =>
             chat._id === chatId ? data.data : chat
           )
         );
 
-        // Update selectedChat if it's the one we refreshed
-        if (selectedChat && selectedChat._id === chatId) {
-          setSelectedChat(data.data);
-        }
+        setSelectedChat((prev) => {
+          if (!prev || prev._id !== chatId) return prev;
+          return data.data;
+        });
       }
     } catch (error) {
       console.error("Refresh chat error:", error);
@@ -118,6 +137,7 @@ export const AppContextProvider = ({ children }) => {
   const value = {
     user,
     isLoaded,
+    isCreatingChat,
     chats,
     setChats,
     selectedChat,

@@ -16,16 +16,16 @@ function extractAssistantContent(payload) {
     }
 
     return (
+        (typeof payload.data === "string" ? payload.data : "") ||
+        payload?.data?.response ||
+        payload?.data?.content ||
+        payload?.data?.message ||
         payload.response ||
         payload.content ||
         payload.message ||
         payload.answer ||
         payload.result ||
         payload.output ||
-        (typeof payload.data === "string" ? payload.data : "") ||
-        payload?.data?.response ||
-        payload?.data?.content ||
-        payload?.data?.message ||
         payload?.choices?.[0]?.message?.content ||
         payload?.choices?.[0]?.text ||
         ""

@@ -8,7 +8,7 @@ import ChatLabel from './ChatLabel'
 const SideBar = ({expand, setExpand}) => {
 
   const { openSignIn } = useClerk();
-  const { user, chats, createNewChat } = useAppContext();
+  const { user, chats, createNewChat, isCreatingChat } = useAppContext();
   const [openMenu, setOpenMenu] = useState({id: 0, open: false})
 
   return (
@@ -53,11 +53,12 @@ const SideBar = ({expand, setExpand}) => {
 
         {/* New Chat Button */}
         <button onClick={createNewChat}
+          disabled={isCreatingChat}
           className={`group flex items-center justify-center cursor-pointer transition-all duration-200 ${
             expand
               ? "bg-gray-700 hover:bg-gray-600 rounded-xl gap-3 p-3 w-full border border-gray-600 hover:border-gray-500 hover:shadow-lg"
               : "relative h-12 w-12 mx-auto hover:bg-white/10 rounded-xl border border-white/10 hover:border-white/20"
-          }`}
+          } ${isCreatingChat ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
           {expand ? (
             <>
@@ -67,7 +68,7 @@ const SideBar = ({expand, setExpand}) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </div>
-              <span className="text-white font-medium">New Chat</span>
+              <span className="text-white font-medium">{isCreatingChat ? 'Creating...' : 'New Chat'}</span>
             </>
           ) : (
             <>
@@ -94,7 +95,7 @@ const SideBar = ({expand, setExpand}) => {
               {chats.length > 0 ? (
                 chats.map((chat, index) => (
                   <ChatLabel 
-                    key={index}
+                    key={chat._id}
                     id={chat._id} 
                     name={chat.name} 
                     openMenu={openMenu} 

@@ -5,7 +5,9 @@ import { useAppContext } from '@/context/AppContext'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 import { useAuth } from '@clerk/nextjs'
+import { FaShare } from 'react-icons/fa6'
 import ShareModal from './ShareModal'
+import ChatActionModal from './ChatActionModal'
 
 const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
 
@@ -13,6 +15,11 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
   const { getToken } = useAuth();
   const menuRef = useRef(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [renameValue, setRenameValue] = useState(name || '');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -28,16 +35,16 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
     };
   }, [setOpenMenu]);
 
-  const selectedChat = () => {
+  const selectChat = () => {
     const chatData = chats.find(chat => chat._id === id);
     setSelectedChat(chatData);
-    console.log(chatData);
   }
 
-  const renameHandler = async() => {
+  const renameHandler = async(newName) => {
     try {
-      const newName = prompt("Enter new chat name", name);
       if (!newName || newName.trim() === '') return;
+
+      setIsRenaming(true);
       
       const token = await getToken();
       const {data} = await axios.post('/api/chat/rename', {
@@ -51,6 +58,7 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
       
       if (data.success) {
         await fetchUsersChats();
+        setShowRenameModal(false);
         setOpenMenu({id: '0', open: false});
         toast.success(data.message || "Chat renamed successfully");
       }
@@ -60,14 +68,15 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
     } catch (error) {
       console.error("Rename error:", error);
       toast.error(error.response?.data?.message || error.message || "Failed to rename chat");
+    } finally {
+      setIsRenaming(false);
     }
   }
 
 
   const deleteHandler = async () => {
     try {
-      const confirmDelete = window.confirm("Are you sure you want to delete this chat?");
-      if (!confirmDelete) return;
+      setIsDeleting(true);
       
       const token = await getToken();
       const {data} = await axios.post('/api/chat/delete', {
@@ -79,8 +88,9 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
       });
       
       if (data.success) {
+        setSelectedChat((prev) => (prev?._id === id ? null : prev));
         await fetchUsersChats();
-        setSelectedChat(null);
+        setShowDeleteModal(false);
         setOpenMenu({id: '0', open: false});
         toast.success(data.message || "Chat deleted successfully");
       }
@@ -90,6 +100,8 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
     } catch (error) {
       console.error("Delete error:", error);
       toast.error(error.response?.data?.message || error.message || "Failed to delete chat");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -100,7 +112,7 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
 
   return (
     <div 
-      onClick={selectedChat} 
+      onClick={selectChat} 
       className='group flex items-center justify-between p-3 text-gray-300 hover:text-white hover:bg-white/10 rounded-xl text-sm cursor-pointer transition-all duration-200 border border-transparent hover:border-white/10'
     >
       <div className='flex items-center gap-3 flex-1 min-w-0'>
@@ -132,14 +144,16 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
               }}
               className='flex items-center gap-3 hover:bg-blue-600/20 px-3 py-2 transition-colors cursor-pointer text-blue-400 hover:text-blue-300'
             >
-              <Image src={assets.copy_icon} alt='Share' className='w-4 h-4'/>
+              <FaShare className='h-4 w-4' />
               <span className='text-sm'>Share</span>
             </div>
 
             <div 
               onClick={(e) => {
                 e.stopPropagation();
-                renameHandler();
+                setRenameValue(name || '');
+                setShowRenameModal(true);
+                setOpenMenu({id: '0', open: false});
               }}
               className='flex items-center gap-3 hover:bg-gray-700 px-3 py-2 transition-colors cursor-pointer'
             >
@@ -150,7 +164,8 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
             <div 
               onClick={(e) => {
                 e.stopPropagation();
-                deleteHandler();
+                setShowDeleteModal(true);
+                setOpenMenu({id: '0', open: false});
               }}
               className='flex items-center gap-3 hover:bg-red-600/20 px-3 py-2 transition-colors cursor-pointer text-red-400 hover:text-red-300'
             >
@@ -166,6 +181,32 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
         onClose={() => setShowShareModal(false)}
         chatId={id}
         chatName={name}
+      />
+
+      <ChatActionModal
+        isOpen={showRenameModal}
+        mode='rename'
+        title='Rename Chat'
+        message='Enter a new name for this chat.'
+        confirmText='Rename'
+        value={renameValue}
+        onChange={setRenameValue}
+        onConfirm={renameHandler}
+        onClose={() => setShowRenameModal(false)}
+        isLoading={isRenaming}
+      />
+
+      <ChatActionModal
+        isOpen={showDeleteModal}
+        mode='delete'
+        title='Delete Chat'
+        message='This action cannot be undone. Do you want to permanently delete this chat?'
+        confirmText='Delete'
+        value=''
+        onChange={() => {}}
+        onConfirm={deleteHandler}
+        onClose={() => setShowDeleteModal(false)}
+        isLoading={isDeleting}
       />
     </div>
   )
