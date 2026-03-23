@@ -16,18 +16,21 @@ export async function POST(request) {
 
         const { chatId, name } = await request.json();
 
-        //  Connect Db
         await dbConnect();
-        await Chat.findOneAndUpdate({
-            _id: chatId,
-            userId
-        },
-        {name}
-    )
+        const updatedChat = await Chat.findOneAndUpdate(
+            { _id: chatId, userId },
+            { name },
+            { new: true }
+        );
 
-    return NextResponse.json({
-        success: true, message: "Chat Renamed"
-    });
+        if (!updatedChat) {
+            return NextResponse.json({
+                success: false,
+                message: "Chat not found or unauthorized"
+            }, { status: 404 });
+        }
+
+    return NextResponse.json({ success: true, message: "Chat Renamed", data: updatedChat }, { status: 200 });
         
     } catch (error) {
         return NextResponse.json({

@@ -11,7 +11,7 @@ export const useAppContext = () => {
 };
 
 export const AppContextProvider = ({ children }) => {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
 
   const [chats, setChats] = useState([]);
@@ -33,8 +33,6 @@ export const AppContextProvider = ({ children }) => {
       );
 
       if (response.data.success) {
-        // Clear current selection and refresh chats
-        setSelectedChat(null);
         await fetchUsersChats();
         toast.success("New chat created!");
       } else {
@@ -60,17 +58,13 @@ export const AppContextProvider = ({ children }) => {
         console.log("Fetched chats:", data.data);
         setChats(data.data);
 
-        // If the user has no chats, create one
         if (data.data.length === 0) {
-          // Don't create auto chat, let user create manually
           setSelectedChat(null);
         } else {
-          // Sort chats by updated date
           data.data.sort(
             (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
           );
 
-          // If no chat is selected or selected chat is deleted, select the most recent
           if (!selectedChat || !data.data.find(chat => chat._id === selectedChat._id)) {
             setSelectedChat(data.data[0]);
             console.log("Selected chat:", data.data[0]);
@@ -123,6 +117,7 @@ export const AppContextProvider = ({ children }) => {
 
   const value = {
     user,
+    isLoaded,
     chats,
     setChats,
     selectedChat,

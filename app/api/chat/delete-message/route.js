@@ -16,10 +16,8 @@ export async function POST(request) {
             return NextResponse.json({ success: false, message: "Missing required fields" });
         }
 
-        // Connect to database
         await dbConnect();
         
-        // Find the chat
         const chat = await Chat.findOne({
             userId,
             _id: chatId
@@ -29,12 +27,10 @@ export async function POST(request) {
             return NextResponse.json({ success: false, message: "Chat not found" });
         }
 
-        // Check if message index is valid
         if (messageIndex < 0 || messageIndex >= chat.messages.length) {
             return NextResponse.json({ success: false, message: "Invalid message index" });
         }
 
-        // Remove the message at the specified index
         chat.messages.splice(messageIndex, 1);
 
         // Save the updated chat

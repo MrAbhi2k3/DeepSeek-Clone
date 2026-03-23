@@ -13,13 +13,16 @@ export async function POST(request) {
         }
 
 
-        // Connect the Database to update the Chat name
         await dbConnect();
-        await Chat.deleteOne({
+        const result = await Chat.deleteOne({
             _id: chatId, userId
-        })
+        });
 
-        return NextResponse.json({ success: true, message: "Chat Deleted Successfully" });
+        if (result.deletedCount === 0) {
+            return NextResponse.json({ success: false, message: "Chat not found or unauthorized" }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, message: "Chat Deleted Successfully" }, { status: 200 });
     } catch (error) {
         return NextResponse.json({ success: false, error: error.message });
     }

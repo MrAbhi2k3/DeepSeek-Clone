@@ -1,16 +1,18 @@
 import { assets } from '@/assets/assets'
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useAppContext } from '@/context/AppContext'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 import { useAuth } from '@clerk/nextjs'
+import ShareModal from './ShareModal'
 
 const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
 
   const {fetchUsersChats, chats, setSelectedChat} = useAppContext();
   const { getToken } = useAuth();
   const menuRef = useRef(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -48,8 +50,7 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
       });
       
       if (data.success) {
-        // Update the chat name in the UI
-        fetchUsersChats();
+        await fetchUsersChats();
         setOpenMenu({id: '0', open: false});
         toast.success(data.message || "Chat renamed successfully");
       }
@@ -78,8 +79,8 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
       });
       
       if (data.success) {
-        fetchUsersChats();
-        setSelectedChat(null); // Clear selected chat if it was deleted
+        await fetchUsersChats();
+        setSelectedChat(null);
         setOpenMenu({id: '0', open: false});
         toast.success(data.message || "Chat deleted successfully");
       }
@@ -90,6 +91,11 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
       console.error("Delete error:", error);
       toast.error(error.response?.data?.message || error.message || "Failed to delete chat");
     }
+  }
+
+  const shareHandler = () => {
+    setShowShareModal(true);
+    setOpenMenu({id: '0', open: false});
   }
 
   return (
@@ -122,6 +128,17 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
             <div 
               onClick={(e) => {
                 e.stopPropagation();
+                shareHandler();
+              }}
+              className='flex items-center gap-3 hover:bg-blue-600/20 px-3 py-2 transition-colors cursor-pointer text-blue-400 hover:text-blue-300'
+            >
+              <Image src={assets.copy_icon} alt='Share' className='w-4 h-4'/>
+              <span className='text-sm'>Share</span>
+            </div>
+
+            <div 
+              onClick={(e) => {
+                e.stopPropagation();
                 renameHandler();
               }}
               className='flex items-center gap-3 hover:bg-gray-700 px-3 py-2 transition-colors cursor-pointer'
@@ -143,6 +160,13 @@ const ChatLabel = ({openMenu, setOpenMenu, id , name}) => {
           </div>
         )}
       </div>
+
+      <ShareModal 
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        chatId={id}
+        chatName={name}
+      />
     </div>
   )
 }

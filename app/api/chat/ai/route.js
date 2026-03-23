@@ -1,75 +1,50 @@
-// DeepSeek API Integration with Python API Fallback
-
 export const maxDuration = 60;
 import dbConnect from "@/config/configDB";
 import { getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import Chat from "@/models/Chat";
 
-// Primary DeepSeek API
-const deepseekClient = new OpenAI({
-        baseURL: 'https://api.deepseek.com/v1',
-        apiKey: process.env.DEEPSEEK_API_KEY
-});
+const KIMI_API_URL = "https://baseapi-sigma.vercel.app/api/openai/kimi";
 
-// Function to call Python API fallback
-async function callPythonAPI(messages) {
-    if (!process.env.PYTHON_API_URL) {
-        throw new Error("Python API URL not configured");
+function extractAssistantContent(payload) {
+    if (typeof payload === "string") {
+        return payload;
     }
 
-    const response = await fetch(process.env.PYTHON_API_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            messages: messages,
-            model: "deepseek-chat",
-            stream: false,
-            temperature: 0.7,
-            max_tokens: 4000
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error(`Python API error: ${response.status} - ${response.statusText}`);
+    if (!payload || typeof payload !== "object") {
+        return "";
     }
 
-    const data = await response.json();
-    return {
-        choices: [{
-            message: {
-                role: "assistant",
-                content: data.response || data.content || data.message || "No response from Python API"
-            }
-        }]
-    };
+    return (
+        payload.response ||
+        payload.content ||
+        payload.message ||
+        payload.answer ||
+        payload.result ||
+        payload.output ||
+        (typeof payload.data === "string" ? payload.data : "") ||
+        payload?.data?.response ||
+        payload?.data?.content ||
+        payload?.data?.message ||
+        payload?.choices?.[0]?.message?.content ||
+        payload?.choices?.[0]?.text ||
+        ""
+    );
 }
 
 export async function POST(request) {
     try {
-        // Check for required environment variables
-        if (!process.env.DEEPSEEK_API_KEY && !process.env.PYTHON_API_URL) {
-            return NextResponse.json({ 
-                success: false, 
-                message: "Please set DEEPSEEK_API_KEY or PYTHON_API_URL" 
-            });
-        }
-
         const { userId } = getAuth(request);
         const { chatId, prompt } = await request.json();
 
         if (!userId) {
-            return NextResponse.json({ success: false, message: "User not Authenticated" });
+            return NextResponse.json({ success: false, message: "User not Authenticated" }, { status: 401 });
         }
 
         if (!chatId || !prompt) {
-            return NextResponse.json({ success: false, message: "Missing required fields" });
+            return NextResponse.json({ success: false, message: "Missing required fields" }, { status: 400 });
         }
 
-        // Connect Db and Find the Chat
         await dbConnect();
         const data = await Chat.findOne({
             userId,
@@ -77,107 +52,66 @@ export async function POST(request) {
         });
 
         if (!data) {
-            return NextResponse.json({ success: false, message: "Chat not found" });
+            return NextResponse.json({ success: false, message: "Chat not found" }, { status: 404 });
         }
-        // Add user message to the chat
+
         const userPrompt = {
             role: "user",
-            content: prompt,
+            content: prompt.trim(),
             timestamp: Date.now(),
         };
 
+        const isFirstMessage = data.messages.length === 0;
         data.messages.push(userPrompt);
-        console.log(`Added user message to chat ${chatId}. Total messages: ${data.messages.length}`);
 
-        // Build conversation history for better context
-        const conversationMessages = [
-            { role: "system", content: "You are DeepSeek, a helpful AI assistant. Provide accurate, helpful, and detailed responses." },
-            ...data.messages.map(msg => ({
-                role: msg.role,
-                content: msg.content
-            }))
-        ];
-
-        let completion;
-        let apiUsed = "unknown";
-
-        // Try DeepSeek API first
-        if (process.env.DEEPSEEK_API_KEY) {
-            try {
-                completion = await deepseekClient.chat.completions.create({
-                    messages: conversationMessages,
-                    model: "deepseek-chat",
-                    stream: false,
-                    temperature: 0.7,
-                    max_tokens: 4000
-                });
-                apiUsed = "DeepSeek";
-            } catch (deepseekError) {
-                console.log("DeepSeek API failed, trying Python API fallback:", deepseekError.message);
-                
-                // If DeepSeek fails (insufficient credits, rate limit, etc.), try Python API
-                if (process.env.PYTHON_API_URL) {
-                    try {
-                        completion = await callPythonAPI(conversationMessages);
-                        apiUsed = "Python API (fallback)";
-                    } catch (pythonError) {
-                        throw new Error(`Both APIs failed. DeepSeek: ${deepseekError.message}, Python API: ${pythonError.message}`);
-                    }
-                } else {
-                    throw deepseekError;
-                }
-            }
-        } else if (process.env.PYTHON_API_URL) {
-            // If no DeepSeek key, use Python API directly
-            completion = await callPythonAPI(conversationMessages);
-            apiUsed = "Python API";
-        } else {
-            throw new Error("No API configured");
+        // https://github.com/MrAbhi2k3
+        if (isFirstMessage && data.name === "New Chat") {
+            const firstMessageWords = prompt.trim().split(/\s+/).slice(0, 4).join(" ");
+            data.name = firstMessageWords || "New Chat";
         }
-        const response = completion.choices[0].message;
-        response.timestamp = Date.now();
+
+        const endpoint = `${KIMI_API_URL}?text=${encodeURIComponent(prompt.trim())}`;
+        const apiResponse = await fetch(endpoint, {
+            method: "GET",
+            cache: "no-store",
+        });
+
+        if (!apiResponse.ok) {
+            throw new Error(`Kimi API request failed with status ${apiResponse.status}`);
+        }
+
+        const contentType = apiResponse.headers.get("content-type") || "";
+        const body = contentType.includes("application/json")
+            ? await apiResponse.json()
+            : await apiResponse.text();
+
+        const assistantContent = extractAssistantContent(body);
+
+        if (!assistantContent || !assistantContent.trim()) {
+            throw new Error("Kimi API returned an empty response");
+        }
+
+        const response = {
+            role: "assistant",
+            content: assistantContent.trim(),
+            timestamp: Date.now(),
+        };
+
         data.messages.push(response);
-        
-        // Save the updated chat with error handling
-        try {
-            await data.save();
-            console.log(`Chat ${chatId} updated successfully with ${data.messages.length} messages`);
-        } catch (saveError) {
-            console.error("Error saving chat:", saveError);
-            throw new Error("Failed to save chat history");
-        }
+        await data.save();
 
         return NextResponse.json({ 
             success: true, 
             data: response,
-            apiUsed: apiUsed,
+            apiUsed: "Kimi API",
             messageCount: data.messages.length
-        });
+        }, { status: 200 });
     } catch (error) {
         console.error("API Error:", error);
-        
-        // Handle specific DeepSeek API errors
-        if (error.status === 429) {
-            return NextResponse.json({ 
-                success: false, 
-                message: "Rate limit exceeded on DeepSeek API. Please try again in a moment." 
-            });
-        }
-        
-        if (error.status === 401) {
-            return NextResponse.json({ 
-                success: false, 
-                message: "Invalid DeepSeek API key. Please check your API key configuration." 
-            });
-        }
 
-        if (error.status === 402) {
-            return NextResponse.json({ 
-                success: false, 
-                message: "Insufficient credits. Please check your DeepSeek account balance." 
-            });
-        }
-        
-        return NextResponse.json({ success: false, message: error.message });
+        return NextResponse.json(
+            { success: false, message: error.message || "Internal Server Error" },
+            { status: 500 }
+        );
     }
 }

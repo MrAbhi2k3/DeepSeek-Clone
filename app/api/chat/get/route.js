@@ -28,9 +28,8 @@ export async function GET(request) {
             .sort(sort)
             .skip((page - 1) * limit)
             .limit(limit)
-            .lean(); // Convert to plain JS objects for better performance
+            .lean();
 
-        // Get total count for pagination info
         const total = await Chat.countDocuments({ userId });
 
         return NextResponse.json(

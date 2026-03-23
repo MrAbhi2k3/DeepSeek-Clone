@@ -2,53 +2,62 @@ import { assets } from '@/assets/assets'
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@clerk/nextjs';
 import Image from 'next/image'
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
 const ChatBox = () => {
     const [prompt, setPrompt] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const { selectedChat, chats, setChats, fetchUsersChats, refreshChatById } = useAppContext();
+    const { user, isLoaded, selectedChat, setSelectedChat, chats, setChats, fetchUsersChats, refreshChatById } = useAppContext();
     const { getToken } = useAuth();
 
     const handleKeyDown = (e) => {
         if (e.key === 'Enter') {
             if (e.ctrlKey || e.metaKey) {
-                // Ctrl+Enter or Cmd+Enter to send
                 e.preventDefault();
                 sendPrompt(e);
             } else if (!e.shiftKey) {
-                // Enter without Shift to send (but allow Shift+Enter for new line)
                 e.preventDefault();
                 sendPrompt(e);
             }
         }
     };
 
+    const appendMessageToActiveChat = (chatId, message) => {
+        setSelectedChat(prev => {
+            if (!prev || prev._id !== chatId) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                messages: [...(prev.messages || []), message],
+            };
+        });
+    };
+
     const sendPrompt = async (e) => {
         const promptCopy = prompt;
-        const timeoutIds = []; // Store timeout IDs for cleanup
 
         try {
-            e.preventDefault();
-            
-            // Validation checks
-            if (!user) {
-                toast.error("Please login to send a message");
+            e?.preventDefault?.();
+
+            if (!isLoaded || !user) {
+                toast.error("Please wait for login to complete or login to send a message");
                 return;
             }
-            
+
             if (!selectedChat) {
                 toast.error("No chat selected");
                 return;
             }
-            
+
             if (isLoading) {
                 toast.error("Please wait for the previous response to complete");
                 return;
             }
-            
+
             if (!prompt.trim()) {
                 toast.error("Message cannot be empty");
                 return;
@@ -57,114 +66,115 @@ const ChatBox = () => {
             setIsLoading(true);
             setPrompt("");
 
-            // Create user message
+            const activeChatId = selectedChat._id;
+            const promptText = prompt.trim();
             const userPrompt = {
                 role: "user",
-                content: prompt,
+                content: promptText,
                 timestamp: Date.now(),
             };
 
-            // Update chats and selected chat
-            const updatedChats = chats.map(chat => 
-                chat._id === selectedChat._id 
+            const updatedChats = chats.map(chat =>
+                chat._id === activeChatId
                     ? { ...chat, messages: [...chat.messages, userPrompt] } 
                     : chat
             );
-            
-            setChats(updatedChats);
-            setSelectedChat(prev => ({
-                ...prev,
-                messages: [...prev.messages, userPrompt],
-            }));
 
-            // Send to API
+            setChats(updatedChats);
+            appendMessageToActiveChat(activeChatId, userPrompt);
+
             const token = await getToken();
-            
+
             if (!token) {
                 throw new Error("Authentication token not available. Please try logging out and logging back in.");
             }
-            
-            let data;
-            try {
-                const response = await axios.post('/api/chat/ai', {
-                    chatId: selectedChat._id,
-                    prompt
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                });
-                data = response.data;
-            } catch (axiosError) {
-                console.error("Axios Error:", axiosError);
-                
-                // If it's a network error or server error, throw a more specific message
-                if (axiosError.response?.data) {
-                    data = axiosError.response.data;
-                } else {
-                    throw new Error(axiosError.message || "Network error occurred");
+
+            // https://github.com/MrAbhi2k3
+            const { data } = await axios.post('/api/chat/ai', {
+                chatId: activeChatId,
+                prompt: promptText
+            }, {
+                headers: {
+                    Authorization: `Bearer ${token}`
                 }
-            }
+            });
 
             if (!data?.success) {
                 throw new Error(data?.message || data?.error || "Failed to process your message");
             }
 
             const message = data.data?.content || "";
-            const messageTokens = message.split(" ");
+            const messageTokens = message.split(/\s+/).filter(Boolean);
 
-            // Initialize assistant message
             const initialAssistantMessage = {
                 role: "assistant",
                 content: "",
                 timestamp: Date.now(),
             };
 
-            // Add empty assistant message
-            setSelectedChat(prev => ({
-                ...prev,
-                messages: [...prev.messages, initialAssistantMessage],
-            }));
+            appendMessageToActiveChat(activeChatId, initialAssistantMessage);
 
-            // Stream tokens with animation
             for (let i = 0; i < messageTokens.length; i++) {
-                const timeoutId = setTimeout(() => {
-                    const currentContent = messageTokens.slice(0, i + 1).join(" ");
-                    setSelectedChat(prev => {
-                        const updatedMessages = [
-                            ...prev.messages.slice(0, -1),
-                            { ...initialAssistantMessage, content: currentContent },
-                        ];
-                        return {
-                            ...prev,
-                            messages: updatedMessages,
-                        };
-                    });
-                }, i * 100);
-                timeoutIds.push(timeoutId);
+                const currentContent = messageTokens.slice(0, i + 1).join(" ");
+                setSelectedChat(prev => {
+                    if (!prev || prev._id !== activeChatId || !prev.messages?.length) {
+                        return prev;
+                    }
+
+                    const updatedMessages = [
+                        ...prev.messages.slice(0, -1),
+                        { ...initialAssistantMessage, content: currentContent },
+                    ];
+
+                    return {
+                        ...prev,
+                        messages: updatedMessages,
+                    };
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 35));
             }
 
-            // Final update after streaming completes
-            const finalTimeoutId = setTimeout(async () => {
-                setChats(prevChats => 
-                    prevChats.map(chat => 
-                        chat._id === selectedChat._id 
-                            ? { ...chat, messages: [...chat.messages, { ...initialAssistantMessage, content: message }] } 
-                            : chat
-                    )
-                );
-                
-                // Refresh the specific chat from database to ensure persistence
-                try {
-                    await refreshChatById(selectedChat._id);
-                    console.log("Chat refreshed successfully after message");
-                } catch (error) {
-                    console.error("Error refreshing chat:", error);
-                    // Fallback to full refresh if needed
-                    await fetchUsersChats();
+            const finalAssistantMessage = {
+                ...initialAssistantMessage,
+                content: message,
+            };
+
+            setSelectedChat(prev => {
+                if (!prev || prev._id !== activeChatId || !prev.messages?.length) {
+                    return prev;
                 }
-            }, messageTokens.length * 100);
-            timeoutIds.push(finalTimeoutId);
+
+                const updatedMessages = [
+                    ...prev.messages.slice(0, -1),
+                    finalAssistantMessage,
+                ];
+
+                return {
+                    ...prev,
+                    messages: updatedMessages,
+                };
+            });
+
+            setChats(prevChats =>
+                prevChats.map(chat => {
+                    if (chat._id !== activeChatId) {
+                        return chat;
+                    }
+
+                    const existingMessages = chat.messages || [];
+                    return {
+                        ...chat,
+                        messages: [...existingMessages, finalAssistantMessage],
+                    };
+                })
+            );
+
+            try {
+                await refreshChatById(activeChatId);
+            } catch {
+                await fetchUsersChats();
+            }
 
         } catch (error) {
             console.error("Error sending message:", error);
@@ -173,19 +183,7 @@ const ChatBox = () => {
         } finally {
             setIsLoading(false);
         }
-
-        // Cleanup function
-        return () => timeoutIds.forEach(clearTimeout);
     };
-
-    // Cleanup timeouts when component unmounts
-    useEffect(() => {
-        return () => {
-            // Clear any pending timeouts when component unmounts
-            const allTimeouts = setTimeout(() => {}, 0);
-            clearTimeout(allTimeouts);
-        };
-    }, []);
 
     return (
         <div className="w-full max-w-4xl">
@@ -201,7 +199,6 @@ const ChatBox = () => {
                         required
                         onChange={(e) => {
                             setPrompt(e.target.value);
-                            // Auto-resize textarea
                             e.target.style.height = 'auto';
                             e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
                         }} 
@@ -212,9 +209,9 @@ const ChatBox = () => {
                     
                     <button 
                         type="submit" 
-                        disabled={isLoading || !prompt.trim()}
+                        disabled={isLoading || !prompt.trim() || !isLoaded || !user}
                         className={`flex-shrink-0 transition-all duration-200 rounded-xl p-3 ${
-                            prompt.trim() && !isLoading
+                            prompt.trim() && !isLoading && isLoaded && user
                                 ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/25 hover:scale-105" 
                                 : "bg-gray-700 text-gray-400 cursor-not-allowed"
                         }`}
